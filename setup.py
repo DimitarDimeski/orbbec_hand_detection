@@ -29,7 +29,9 @@ setup(
             'pointer_tip_depth = orbbec_hand_detection.pointer_tip_depth_publisher:main',
             'pointer_tip_depth_plane = orbbec_hand_detection.pointer_tip_depth_publisher_plane:main',
             'pointer_tip_depth_plane_depth_image = orbbec_hand_detection.pointer_tip_depth_publisher_plane_depth_image:main',
-            'pointer_tip_depth_depth_image = orbbec_hand_detection.pointer_tip_depth_publisher_depth_image:main'
+            'pointer_tip_depth_depth_image = orbbec_hand_detection.pointer_tip_depth_publisher_depth_image:main',
+            'aruco_display_node = orbbec_hand_detection.show_aruco_display_node:main',
+            'screen_calibration_node = orbbec_hand_detection.screen_calibration_node:main',
         ],
     },
 )
