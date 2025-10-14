@@ -2,6 +2,7 @@ from launch import LaunchDescription
 from launch.actions import IncludeLaunchDescription, RegisterEventHandler, ExecuteProcess
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.event_handlers import OnProcessExit
+from launch.substitutions import EnvironmentVariable
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
 import os
@@ -75,8 +76,12 @@ def generate_launch_description():
         name='pointer_tip_depth_plane',
         parameters=[
             {'calib_yaml_path': calibration_file},
-            {'min_detection_confidence': 0.5},
-            {'min_tracking_confidence': 0.5},
+            {'nats_url': EnvironmentVariable('NATS_URL', default_value='nats://localhost:4222')},
+            {'screen_width': EnvironmentVariable('SCREEN_WIDTH', default_value='1920')},
+            {'screen_height': EnvironmentVariable('SCREEN_HEIGHT', default_value='1080')},
+            {'depth_threshold': EnvironmentVariable('DEPTH_THR', default_value='0.01')},
+            {'min_detection_confidence': EnvironmentVariable('MIN_DET_CONF', default_value='0.5')},
+            {'min_tracking_confidence': EnvironmentVariable('MIN_TRACK_CONF', default_value='0.5')},
         ],
         output='screen'
     )
