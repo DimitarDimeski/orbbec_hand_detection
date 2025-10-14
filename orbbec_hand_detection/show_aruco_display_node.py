@@ -10,7 +10,7 @@ class ArucoDisplayNode(Node):
         super().__init__('aruco_display_node')
         self.get_logger().info('Starting ArUco display node...')
 
-        # Parameters (can be set from launch if desired)
+        # Parameters
         self.declare_parameter('width', 1920)
         self.declare_parameter('height', 1080)
         self.declare_parameter('marker_size', 200)
@@ -25,8 +25,17 @@ class ArucoDisplayNode(Node):
         self.aruco_dict = cv2.aruco.getPredefinedDictionary(self.dictionary_id)
 
         # Create and show image
-        image = self.create_image_with_aruco_markers()
-        self.display_image(image)
+        self.image = self.create_image_with_aruco_markers()
+        self.window_name = "Fullscreen ArUco"
+
+        # Display image in fullscreen
+        cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
+        cv2.setWindowProperty(self.window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+        cv2.imshow(self.window_name, self.image)
+
+        # Create a timer to periodically check shutdown
+        self.timer = self.create_timer(0.1, self.update_window)
+        self.get_logger().info("ArUco markers displayed. Node will stay open until shutdown.")
 
     def create_image_with_aruco_markers(self):
         image = np.ones((self.height, self.width, 3), dtype=np.uint8) * 255
@@ -44,25 +53,28 @@ class ArucoDisplayNode(Node):
 
         return image
 
-    def display_image(self, image):
-        window_name = "Fullscreen ArUco"
-        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-        cv2.setWindowProperty(window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-        cv2.imshow(window_name, image)
-        self.get_logger().info("ArUco markers displayed. Press any key to exit.")
-        cv2.waitKey(0)
+    def update_window(self):
+        # This keeps the window responsive (for X11/Wayland event loops)
+        if cv2.getWindowProperty(self.window_name, cv2.WND_PROP_VISIBLE) < 1:
+            self.get_logger().info("Window closed manually. Shutting down node.")
+            rclpy.shutdown()
+        else:
+            cv2.imshow(self.window_name, self.image)
+            cv2.waitKey(1)
+
+    def destroy_node(self):
+        # Clean up OpenCV window on shutdown
         cv2.destroyAllWindows()
-        self.get_logger().info("Window closed, shutting down node.")
-        rclpy.shutdown()
+        self.get_logger().info("ArUco display node shutting down.")
+        super().destroy_node()
 
 
 def main(args=None):
     rclpy.init(args=args)
     node = ArucoDisplayNode()
-    # We don't spin since the node terminates after displaying
-    # rclpy.spin(node)  # Not needed
-    # Just keep it alive until shutdown (cv2.waitKey handles blocking)
-    # Node shuts down itself after closing the window
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
 
 
 if __name__ == '__main__':
