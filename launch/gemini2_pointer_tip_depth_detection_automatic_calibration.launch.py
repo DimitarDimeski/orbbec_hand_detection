@@ -39,7 +39,7 @@ def generate_launch_description():
         ),
         launch_arguments={
             'color_width': '1280',
-            'color_height': '800',
+            'color_height': '720',
             'color_fps': '10',
             'depth_width': '1280',
             'depth_height': '800',
