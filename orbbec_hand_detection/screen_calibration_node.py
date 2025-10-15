@@ -69,6 +69,28 @@ class ScreenPlaneCalibrator(Node):
             self.get_logger().warn("Not all 4 ArUco markers detected.")
             return
 
+        # Flatten IDs for easier handling
+        ids = ids.flatten()
+        
+        # Dictionary to hold marker corners
+        marker_dict = {id_: c.reshape((4, 2)) for id_, c in zip(ids, corners)}
+
+        # Compute outermost edges of screen
+        all_points = np.concatenate(list(marker_dict.values()), axis=0)
+        x_min, y_min = np.min(all_points, axis=0)
+        x_max, y_max = np.max(all_points, axis=0)
+
+        # Define corners in consistent order (TL, TR, BL, BR)
+        x1, y1 = x_min, y_min     # Top-left
+        x2, y2 = x_max, y_min     # Top-right
+        x3, y3 = x_min, y_max     # Bottom-left
+        x4, y4 = x_max, y_max     # Bottom-right
+
+        screen_corners = [[float(x1), float(y1)],
+                          [float(x2), float(y2)],
+                          [float(x3), float(y3)],
+                          [float(x4), float(y4)]]
+
         centers_3d = []
         for i, corner in enumerate(corners):
             c = corner[0]
@@ -91,7 +113,7 @@ class ScreenPlaneCalibrator(Node):
         A, B, C, D = self.define_plane_from_points(centers_3d[0], centers_3d[1], centers_3d[2])
 
         # Save to YAML
-        self.save_to_yaml(A, B, C, D, rgb.shape, self.depth_image.shape, self.depth_K)
+        self.save_to_yaml(A, B, C, D, rgb.shape, self.depth_image.shape, self.depth_K, screen_corners)
         self.get_logger().info(f"Plane parameters saved to {self.output_yaml}")
 
         # Stop after calibration
@@ -109,12 +131,18 @@ class ScreenPlaneCalibrator(Node):
         D = -np.dot(normal, p1)
         return (A, B, C, D)
 
-    def save_to_yaml(self, A, B, C, D, rgb_shape, depth_shape, K):
+    def save_to_yaml(self, A, B, C, D, rgb_shape, depth_shape, K, screen_corners):
         data = {
             'plane': {'A': float(A), 'B': float(B), 'C': float(C), 'D': float(D)},
             'rgb_resolution': {'width': rgb_shape[1], 'height': rgb_shape[0]},
             'depth_resolution': {'width': depth_shape[1], 'height': depth_shape[0]},
-            'depth_intrinsics': K
+            'depth_intrinsics': K,
+            'screen': {
+                'x1': screen_corners[0][0], 'y1': screen_corners[0][1],
+                'x2': screen_corners[1][0], 'y2': screen_corners[1][1],
+                'x3': screen_corners[2][0], 'y3': screen_corners[2][1],
+                'x4': screen_corners[3][0], 'y4': screen_corners[3][1],
+            }
         }
 
         with open(self.output_yaml, 'w') as f:
