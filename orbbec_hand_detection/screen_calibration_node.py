@@ -81,15 +81,15 @@ class ScreenPlaneCalibrator(Node):
         x_max, y_max = np.max(all_points, axis=0)
 
         # Define corners in consistent order (TL, TR, BL, BR)
-        x1, y1 = x_min, y_min     # Top-left
-        x2, y2 = x_max, y_min     # Top-right
-        x3, y3 = x_min, y_max     # Bottom-left
-        x4, y4 = x_max, y_max     # Bottom-right
+        x1, y1 = int(x_min), int(y_min)     # Top-left
+        x2, y2 = int(x_max), int(y_min)     # Top-right
+        x3, y3 = int(x_min), int(y_max)     # Bottom-left
+        x4, y4 = int(x_max), int(y_max)     # Bottom-right
 
-        screen_corners = [[float(x1), float(y1)],
-                          [float(x2), float(y2)],
-                          [float(x3), float(y3)],
-                          [float(x4), float(y4)]]
+        screen_corners = [[x1, y1],
+                          [x2, y2],
+                          [x3, y3],
+                          [x4, y4]]
 
         centers_3d = []
         for i, corner in enumerate(corners):
@@ -136,7 +136,7 @@ class ScreenPlaneCalibrator(Node):
             'plane': {'A': float(A), 'B': float(B), 'C': float(C), 'D': float(D)},
             'rgb_resolution': {'width': rgb_shape[1], 'height': rgb_shape[0]},
             'depth_resolution': {'width': depth_shape[1], 'height': depth_shape[0]},
-            'depth_intrinsics': K,
+            'depth_K': K,
             'screen': {
                 'x1': screen_corners[0][0], 'y1': screen_corners[0][1],
                 'x2': screen_corners[1][0], 'y2': screen_corners[1][1],

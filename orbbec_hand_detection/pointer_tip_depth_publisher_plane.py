@@ -89,7 +89,7 @@ class PointerTipDepthPlanePublisher(Node):
 
         # RGB image dimensions
         self.image_width = calib_data['rgb_resolution']['width']
-        self.iamge_height = calib_data['rgb_resolution']['height']
+        self.image_height = calib_data['rgb_resolution']['height']
 
         
         # Subscribers
@@ -181,7 +181,7 @@ class PointerTipDepthPlanePublisher(Node):
         plane = (self.A, self.B, self.C, self.D)
 
 
-        cv2.rectangle(rgb_image, (self.x1, self.y1), (self.x4, self.y4), (0, 255, 0), 1)
+        cv2.rectangle(rgb_image, (self.x1, self.y1), (self.x4, self.y4), (0, 255, 0), 3)
 
         font = cv2.FONT_HERSHEY_SIMPLEX
         font_scale = 1
