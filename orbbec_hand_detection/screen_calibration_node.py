@@ -62,6 +62,7 @@ class ScreenPlaneCalibrator(Node):
         gray = cv2.cvtColor(rgb, cv2.COLOR_BGR2GRAY)
         corners, ids, _ = cv2.aruco.detectMarkers(gray, self.aruco_dict, parameters=self.aruco_params)
 
+        self.get_logger().info(f"Detected {len(ids)} markers.")
         if ids is None or len(ids) < 4:
             self.get_logger().warn("Not all 4 ArUco markers detected.")
             return

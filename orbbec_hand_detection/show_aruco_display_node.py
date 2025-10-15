@@ -13,7 +13,7 @@ class ArucoDisplayNode(Node):
         # Parameters
         self.declare_parameter('width', 1920)
         self.declare_parameter('height', 1080)
-        self.declare_parameter('marker_size', 200)
+        self.declare_parameter('marker_size', 400)
         self.declare_parameter('dictionary_id', cv2.aruco.DICT_4X4_50)
 
         # Get parameter values
