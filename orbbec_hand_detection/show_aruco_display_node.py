@@ -40,12 +40,19 @@ class ArucoDisplayNode(Node):
     def create_image_with_aruco_markers(self):
         image = np.ones((self.height, self.width, 3), dtype=np.uint8) * 255
 
-        marker_positions = [
+        '''marker_positions = [
             (0, 0),
             (self.width - self.marker_size, 0),
             (0, self.height - self.marker_size),
             (self.width - self.marker_size, self.height - self.marker_size)
-        ]
+        ]'''
+
+        marker_positions = [
+                    (10, 10),
+                    (self.width - self.marker_size - 10, 10),
+                    (10, self.height - self.marker_size - 10),
+                    (self.width - self.marker_size - 10, self.height - self.marker_size - 10)
+                ]
 
         for i, (x, y) in enumerate(marker_positions):
             marker = cv2.aruco.generateImageMarker(self.aruco_dict, i, self.marker_size)

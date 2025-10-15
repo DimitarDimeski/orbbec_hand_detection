@@ -42,10 +42,10 @@ class ScreenPlaneCalibrator(Node):
         if not self.depth_intrinsics_received:
             K = msg.k
             self.depth_K = {
-                'fx': K[0],
-                'fy': K[4],
-                'cx': K[2],
-                'cy': K[5]
+                'fx': float(K[0]),
+                'fy': float(K[4]),
+                'cx': float(K[2]),
+                'cy': float(K[5])
             }
             self.depth_intrinsics_received = True
             self.get_logger().info(f"Depth intrinsics received: {self.depth_K}")
