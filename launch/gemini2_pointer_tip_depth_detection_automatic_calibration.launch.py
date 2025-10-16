@@ -53,6 +53,9 @@ def generate_launch_description():
         package=package_name,
         executable='aruco_display_node',
         name='aruco_display_node',
+        parameters=[
+            {'output_yaml': calibration_file},
+        ],
         output='screen'
     )
 
@@ -70,6 +73,8 @@ def generate_launch_description():
     )
 
     # These nodes starts after calibration is done
+    
+    # Touch detection node
     pointer_tip_depth_plane_node = Node(
         package=package_name,
         executable='pointer_tip_depth_plane',
@@ -96,19 +101,11 @@ def generate_launch_description():
         )  
     
 
-    # Event handler: when calibration node exits, stop ArUco display node and start other nodes
+    # Event handler: when calibration node exits start touch detection nodes
     stop_calibration_and_start_detection = RegisterEventHandler(
         event_handler=OnProcessExit(
             target_action=screen_calibration_node,
             on_exit=[
-                ExecuteProcess(
-                    cmd=['ros2', 'node', 'kill', '/aruco_display_node'],
-                    shell=True
-                ),
-                ExecuteProcess(
-                    cmd=['echo', '[INFO] Calibration finished. ArUco display node stopped.'],
-                    shell=True
-                ),
                 pointer_tip_depth_plane_node,
             ],
         )
@@ -122,4 +119,5 @@ def generate_launch_description():
         stop_calibration_and_start_detection,
        
     ])
+
 

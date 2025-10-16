@@ -16,7 +16,7 @@ class ScreenPlaneCalibrator(Node):
         self.declare_parameter('rgb_topic', '/camera/color/image_raw')
         self.declare_parameter('depth_topic', '/camera/depth/image_raw')
         self.declare_parameter('depth_info_topic', '/camera/depth/camera_info')
-        self.declare_parameter('output_yaml', 'screen_plane.yaml')
+        self.declare_parameter('output_yaml', 'calibration.yaml')
 
         self.rgb_topic = self.get_parameter('rgb_topic').value
         self.depth_topic = self.get_parameter('depth_topic').value
@@ -35,6 +35,9 @@ class ScreenPlaneCalibrator(Node):
         # ArUco setup
         self.aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
         self.aruco_params = cv2.aruco.DetectorParameters()
+
+        # Boolean to invert the image half of the time
+        self.latest_inverted = False
 
         self.get_logger().info('Screen Plane Calibrator Node Started.')
 
@@ -60,6 +63,13 @@ class ScreenPlaneCalibrator(Node):
 
         rgb = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
         gray = cv2.cvtColor(rgb, cv2.COLOR_BGR2GRAY)
+        
+        # Invert the image if previous hasn't been inverted
+        if not self.latest_inverted:
+            gray = cv2.bitwise_not(gray)
+
+        self.latest_inverted = not self.latest_inverted
+        
         corners, ids, _ = cv2.aruco.detectMarkers(gray, self.aruco_dict, parameters=self.aruco_params)
 
         if ids is not None:
@@ -155,7 +165,7 @@ def main(args=None):
     node = ScreenPlaneCalibrator()
     rclpy.spin(node)
     node.destroy_node()
-    rclpy.shutdown()
 
 if __name__ == '__main__':
     main()
+
