@@ -28,7 +28,7 @@ def generate_launch_description():
         print(f"[INFO] Removing old calibration file: {calibration_file}")
         os.remove(calibration_file)
 
-    # --- Include Orbbec camera launch ---
+    # Include Orbbec camera launch
     camera_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(
@@ -101,23 +101,24 @@ def generate_launch_description():
         )  
     
 
-    # Event handler: when calibration node exits start touch detection nodes
+    # Event handler: when calibration node exits start touch detection and visualization nodes
     stop_calibration_and_start_detection = RegisterEventHandler(
         event_handler=OnProcessExit(
             target_action=screen_calibration_node,
             on_exit=[
+                rviz_node,
                 pointer_tip_depth_plane_node,
             ],
         )
     )
 
     return LaunchDescription([
-        rviz_node,
         camera_launch,
         aruco_display_node,
         screen_calibration_node,
         stop_calibration_and_start_detection,
        
     ])
+
 
 

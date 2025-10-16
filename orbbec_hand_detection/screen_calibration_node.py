@@ -16,12 +16,14 @@ class ScreenPlaneCalibrator(Node):
         self.declare_parameter('rgb_topic', '/camera/color/image_raw')
         self.declare_parameter('depth_topic', '/camera/depth/image_raw')
         self.declare_parameter('depth_info_topic', '/camera/depth/camera_info')
+        self.declare_parameter('num_samples_avg', 10)
         self.declare_parameter('output_yaml', 'calibration.yaml')
 
         self.rgb_topic = self.get_parameter('rgb_topic').value
         self.depth_topic = self.get_parameter('depth_topic').value
         self.depth_info_topic = self.get_parameter('depth_info_topic').value
         self.output_yaml = self.get_parameter('output_yaml').value
+        self.num_samples_avg = self.get_parameter('num_samples_avg').value
 
         # Subscriptions
         self.rgb_sub = self.create_subscription(Image, self.rgb_topic, self.rgb_callback, 10)
@@ -31,6 +33,10 @@ class ScreenPlaneCalibrator(Node):
         self.depth_intrinsics_received = False
         self.depth_image = None
         self.depth_K = None
+        self.num_samples = 0
+        self.filtered_depth = []
+        self.corners = None
+        self.screen_corners = None
 
         # ArUco setup
         self.aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
@@ -62,47 +68,70 @@ class ScreenPlaneCalibrator(Node):
             return
 
         rgb = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
-        gray = cv2.cvtColor(rgb, cv2.COLOR_BGR2GRAY)
-        
-        # Invert the image if previous hasn't been inverted
-        if not self.latest_inverted:
-            gray = cv2.bitwise_not(gray)
 
-        self.latest_inverted = not self.latest_inverted
-        
-        corners, ids, _ = cv2.aruco.detectMarkers(gray, self.aruco_dict, parameters=self.aruco_params)
-
-        if ids is not None:
-            self.get_logger().info(f"Detected {len(ids)} markers.")
+        # Only perform the code in this block once, after that skip to avoid unnecessary computation
+        if self.num_samples == 0:
+            gray = cv2.cvtColor(rgb, cv2.COLOR_BGR2GRAY)
             
-        if ids is None or len(ids) < 4:
-            self.get_logger().warn("Not all 4 ArUco markers detected.")
-            return
+            # Invert the image if previous hasn't been inverted
+            if not self.latest_inverted:
+                gray = cv2.bitwise_not(gray)
 
-        # Flatten IDs for easier handling
-        ids = ids.flatten()
-        
-        # Dictionary to hold marker corners
-        marker_dict = {id_: c.reshape((4, 2)) for id_, c in zip(ids, corners)}
+            self.latest_inverted = not self.latest_inverted
+            
+            self.corners, ids, _ = cv2.aruco.detectMarkers(gray, self.aruco_dict, parameters=self.aruco_params)
 
-        # Compute outermost edges of screen
-        all_points = np.concatenate(list(marker_dict.values()), axis=0)
-        x_min, y_min = np.min(all_points, axis=0)
-        x_max, y_max = np.max(all_points, axis=0)
+            if ids is not None:
+                self.get_logger().info(f"Detected {len(ids)} markers.")
+                
+            if ids is None or len(ids) < 4:
+                self.get_logger().warn("Not all 4 ArUco markers detected.")
+                return
 
-        # Define corners in consistent order (TL, TR, BL, BR)
-        x1, y1 = int(x_min), int(y_min)     # Top-left
-        x2, y2 = int(x_max), int(y_min)     # Top-right
-        x3, y3 = int(x_min), int(y_max)     # Bottom-left
-        x4, y4 = int(x_max), int(y_max)     # Bottom-right
+            # Flatten IDs for easier handling
+            ids = ids.flatten()
+            
+            # Dictionary to hold marker corners
+            marker_dict = {id_: c.reshape((4, 2)) for id_, c in zip(ids, self.corners)}
 
-        screen_corners = [[x1, y1],
-                          [x2, y2],
-                          [x3, y3],
-                          [x4, y4]]
+            # Compute outermost edges of screen
+            all_points = np.concatenate(list(marker_dict.values()), axis=0)
+            x_min, y_min = np.min(all_points, axis=0)
+            x_max, y_max = np.max(all_points, axis=0)
 
+            # Define corners in consistent order (TL, TR, BL, BR)
+            x1, y1 = int(x_min), int(y_min)     # Top-left
+            x2, y2 = int(x_max), int(y_min)     # Top-right
+            x3, y3 = int(x_min), int(y_max)     # Bottom-left
+            x4, y4 = int(x_max), int(y_max)     # Bottom-right
+
+            self.screen_corners = [[x1, y1],
+                              [x2, y2],
+                              [x3, y3],
+                              [x4, y4]]
+
+        # If number of needed samples is reached average the depth at the three points and write to file
+        if self.num_samples == self.num_samples_avg:
+            self.filtered_depth = self.filtered_depth / self.num_samples_avg
+
+            self.get_logger().info(f"Filtered depth: {self.filtered_depth}")
+
+            # Define the plane from three points (top-left, top-right, bottom-left)
+            A, B, C, D = self.define_plane_from_points(self.filtered_depth[0], self.filtered_depth[1], self.filtered_depth[2])
+
+            # Save to YAML
+            self.save_to_yaml(A, B, C, D, rgb.shape, self.depth_image.shape, self.depth_K, self.screen_corners)
+            self.get_logger().info(f"Calibration parameters saved to {self.output_yaml}")
+
+            # Stop after calibration
+            self.destroy_subscription(self.rgb_sub)
+            self.destroy_subscription(self.depth_sub)
+            self.get_logger().info("Calibration complete. Node will shut down in 2 seconds...")
+            self.create_timer(2.0, lambda: rclpy.shutdown())
+
+        # Gather depth information at aruco marker points
         centers_3d = []
-        for i, corner in enumerate(corners):
+        for i, corner in enumerate(self.corners):
             c = corner[0]
             cx = int(np.mean(c[:, 0]))
             cy = int(np.mean(c[:, 1]))
@@ -119,19 +148,15 @@ class ScreenPlaneCalibrator(Node):
             self.get_logger().warn("Less than 4 valid 3D points found.")
             return
 
-        # Define the plane from three points (top-left, top-right, bottom-left)
-        A, B, C, D = self.define_plane_from_points(centers_3d[0], centers_3d[1], centers_3d[2])
+        if self.num_samples == 0:
+            self.filtered_depth = np.array(centers_3d)
+        else:
+            self.filtered_depth += np.array(centers_3d)
 
-        # Save to YAML
-        self.save_to_yaml(A, B, C, D, rgb.shape, self.depth_image.shape, self.depth_K, screen_corners)
-        self.get_logger().info(f"Plane parameters saved to {self.output_yaml}")
+        self.get_logger().info(f"Depth at corners: {centers_3d}")
 
-        # Stop after calibration
-        self.destroy_subscription(self.rgb_sub)
-        self.destroy_subscription(self.depth_sub)
-        self.get_logger().info("Calibration complete. Node will shut down in 2 seconds...")
-        self.create_timer(2.0, lambda: rclpy.shutdown())
-        
+        self.num_samples += 1
+
 
     def define_plane_from_points(self, p1, p2, p3):
         v1 = p2 - p1
