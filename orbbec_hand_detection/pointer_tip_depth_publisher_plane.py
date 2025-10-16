@@ -182,7 +182,7 @@ class PointerTipDepthPlanePublisher(Node):
         plane = (self.A, self.B, self.C, self.D)
 
 
-        cv2.rectangle(rgb_image, (self.x1, self.y1), (self.x4, self.y4), (0, 255, 0), 3)
+        cv2.rectangle(rgb_image, (self.x1, self.y1), (self.x4, self.y4), (0, 255, 0), 2)
 
         font = cv2.FONT_HERSHEY_SIMPLEX
         font_scale = 1
