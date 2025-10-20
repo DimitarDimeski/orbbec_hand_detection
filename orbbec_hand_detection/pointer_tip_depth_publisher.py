@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import rclpy
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
@@ -6,6 +7,7 @@ from cv_bridge import CvBridge
 import cv2
 import os
 import json
+import yaml
 import random
 import time
 import sys
@@ -36,37 +38,78 @@ class PointerTipDepthPublisher(Node):
 
         self.async_loop = loop  # Store asyncio event loop
 
+        # Declare ROS parameters
+        self.declare_parameter('calib_yaml_path', '')
+        self.declare_parameter('nats_url', 'nats://localhost:4222')
+        self.declare_parameter('screen_width', 1920)
+        self.declare_parameter('screen_height', 1080)
+        self.declare_parameter('depth_threshold', 0.01) # meters
+        self.declare_parameter('min_detection_confidence', 0.5)
+        self.declare_parameter('min_tracking_confidence', 0.5)
+
+        # Read parameter values
+        calib_path = self.get_parameter('calib_yaml_path').get_parameter_value().string_value
+        self.nats_url = self.get_parameter('nats_url').value
+        self.screen_width = self.get_parameter('screen_width').value
+        self.screen_height = self.get_parameter('screen_height').value
+        self.depth_threshold = self.get_parameter('depth_threshold').value
+        self.min_detection_conf = self.get_parameter('min_detection_confidence').get_parameter_value().double_value
+        self.min_tracking_conf = self.get_parameter('min_tracking_confidence').get_parameter_value().double_value
+        
+        if not calib_path or not os.path.exists(calib_path):
+            raise FileNotFoundError(f"Calibration YAML not found or invalid path: {calib_path}")
+        
+        # --- Load calibration data ---
+        with open(calib_path, 'r') as f:
+            calib_data = yaml.safe_load(f)
+        self.get_logger().info(f"Loaded calibration data from {calib_path}")
+        
+        # Screen corners
+        self.x1 = calib_data['screen']['x1']
+        self.y1 = calib_data['screen']['y1']
+        self.x2 = calib_data['screen']['x2']
+        self.y2 = calib_data['screen']['y2']
+        self.x3 = calib_data['screen']['x3']
+        self.y3 = calib_data['screen']['y3']
+        self.x4 = calib_data['screen']['x4']
+        self.y4 = calib_data['screen']['y4']
+
+        # Parameters for the detection surface in the image
+        self.surface_width = self.x2 - self.x1
+        self.surface_height = self.y4 - self.y1
+
+        # Depth intrinsics
+        self.depth_K = calib_data['depth_K']
+
+        # RGB image dimensions
+        self.image_width = calib_data['rgb_resolution']['width']
+        self.image_height = calib_data['rgb_resolution']['height']
+
+        
         # Subscribers
         self.rgb_sub = Subscriber(self, Image, '/camera/color/image_raw')
         self.depth_sub = Subscriber(self, Image, '/camera/depth/image_raw')
 
-        self.publisher_ = self.create_publisher(Image, '/image_landmarked', 10)
-
+        # Approximate sync
         self.ts = ApproximateTimeSynchronizer([self.rgb_sub, self.depth_sub], queue_size=10, slop=0.1)
         self.ts.registerCallback(self.image_callback)
-        
-        self.bridge = CvBridge()
-        self.hands = mp.solutions.hands.Hands(
-            min_detection_confidence=0.2,
-            min_tracking_confidence=0.2)
 
-        # Configuration
-        self.nats_url = os.getenv('NATS_URL', 'nats://localhost:4222')
-        self.table_width = int(os.getenv('WIDTH', 640))
-        self.table_height = int(os.getenv('HEIGHT', 480))
-        self.depth_threshold = int(os.getenv('DEPTH', 880))
-        self.screen_width = int(os.getenv('SCREEN_WIDTH', 1920))
-        self.screen_height = int(os.getenv('SCREEN_HEIGHT', 1080))
-        
-        self.touch_id = None
+        self.publisher_ = self.create_publisher(Image, '/image_landmarked', 10)
+        self.bridge = CvBridge()
+
+        # Mediapipe setup
+        self.hands = mp.solutions.hands.Hands(
+            min_detection_confidence=self.min_detection_conf,
+            min_tracking_confidence=self.min_tracking_conf
+        )
+
+
         self.touch_id_counter = 0
-        self.touch_down = InteractionEvents.touch_down()
 
         logger.info(f"NATS URL: {self.nats_url}")
-        logger.info(f"Width x Height x Depth:  {self.table_width} x {self.table_height} x {self.depth_threshold}")
-        logger.info(f"Screen Resolution: {self.screen_width} x {self.screen_height}")
+        logger.info(f"RGB Resolution: {self.image_width} x {self.image_height} x 3")
+        logger.info(f"Screen borders: ({self.x1},{self.y1}),({self.x2},{self.y2}),({self.x3},{self.y3}),({self.x4},{self.y4})")
 
-        self.events_received = []
 
     async def connect_to_bus(self):
         try:
@@ -86,57 +129,48 @@ class PointerTipDepthPublisher(Node):
         scale_y = target_height / bbox_height
         return int(x * scale_x), int(y * scale_y)
 
-    def interaction_handler(self, data, event):
-        self.events_received.append({
-            "type": event.get_key(),
-            "data": data,
-            "priority": event.get_priority()
-        })
-        logger.info(f"🎯 {event.get_key()}: {data}")
 
     def image_callback(self, rgb_msg, depth_msg):
+    
+        # Access intrinsics if needed
+        fx = self.depth_K['fx']
+        fy = self.depth_K['fy']
+        cx = self.depth_K['cx']
+        cy = self.depth_K['cy']
+            
         rgb_image = self.bridge.imgmsg_to_cv2(rgb_msg, desired_encoding='bgr8')
         depth_image = self.bridge.imgmsg_to_cv2(depth_msg, desired_encoding='32FC1')
+        
         rgb_image_for_mediapipe = cv2.cvtColor(rgb_image, cv2.COLOR_BGR2RGB)
         results = self.hands.process(rgb_image_for_mediapipe)
 
-        image_height, image_width, _ = rgb_image.shape
-        logger.info(f"RGB Image Shape:  {rgb_image.shape}")
-
-        if self.table_width <= image_width and self.table_height <= image_height:
-            x1 = int((image_width - self.table_width) / 2)
-            y1 = int((image_height - self.table_height) / 2)
-            x2 = x1 + self.table_width
-            y2 = y1 + self.table_height
-        else:
-            x1, y1 = 0, 0
-            x2, y2 = image_width, image_height
-
-        cv2.rectangle(rgb_image, (x1, y1), (x2, y2), (0, 255, 0), 1)
-        logger.info(f"Depth At Center Of Table: {depth_image[int(self.table_height / 2), int(self.table_width / 2)]}")
+        cv2.rectangle(rgb_image, (self.x1, self.y1), (self.x4, self.y4), (0, 255, 0), 2)
 
         font = cv2.FONT_HERSHEY_SIMPLEX
         font_scale = 1
         thickness = 2
 
+
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
-                index_tip_x = int(hand_landmarks.landmark[mp.solutions.hands.HandLandmark.INDEX_FINGER_TIP].x * image_width)
-                index_tip_y = int(hand_landmarks.landmark[mp.solutions.hands.HandLandmark.INDEX_FINGER_TIP].y * image_height)
+                index_tip_x = int(hand_landmarks.landmark[mp.solutions.hands.HandLandmark.INDEX_FINGER_TIP].x * self.image_width)
+                index_tip_y = int(hand_landmarks.landmark[mp.solutions.hands.HandLandmark.INDEX_FINGER_TIP].y * self.image_height)
 
                 depth = 0
 
-                if 0 <= index_tip_x < depth_image.shape[1] and 0 <= index_tip_y < depth_image.shape[0]:
-                    depth = depth_image[index_tip_y, index_tip_x]
-                    logger.info(f'Index finger tip coordinates: ({index_tip_x}, {index_tip_y}), Depth: {depth:.3f} m')
-                    cv2.putText(rgb_image, f'{depth:.2f}mm', (index_tip_x, index_tip_y), font, font_scale, (0, 255, 0), thickness)
+                if self.x1 <= index_tip_x <= self.x2 and self.y1 <= index_tip_y <= self.y4:
+                    finger_depth = depth_image[index_tip_y, index_tip_x]
+
+                    mp.solutions.drawing_utils.draw_landmarks(rgb_image, hand_landmarks, mp.solutions.hands.HAND_CONNECTIONS)
+                    logger.info(f'Index finger tip coordinates: ({index_tip_x}, {index_tip_y}), Depth: {finger_depth:.3f} m')
+                    cv2.putText(rgb_image, f'{finger_depth:.2f}mm, Screen Distance: {distance}', (index_tip_x, index_tip_y), font, font_scale, (0, 255, 0), thickness)
 
                     mp.solutions.drawing_utils.draw_landmarks(rgb_image, hand_landmarks, mp.solutions.hands.HAND_CONNECTIONS)
 
-                    if x1 <= index_tip_x <= x2 and y1 <= index_tip_y <= y2 and depth >= self.depth_threshold:
+                    if  finger_depth >= self.depth_threshold:
                         cv2.putText(rgb_image, 'TOUCH', (0, 0), font, 2, (0, 255, 0), 4)
 
-                        point = (int(index_tip_x - x1), int(index_tip_y - y1))
+                        point = (int(index_tip_x - self.x1), int(index_tip_y - self.y1))
                         scaled_x, scaled_y = self.map_point_to_screen_resolution(point, self.table_width, self.table_height, self.screen_width, self.screen_height)
 
                         self.touch_id = self.generate_touch_id()

@@ -161,7 +161,7 @@ class PointerTipDepthPlanePublisher(Node):
         Check if the finger point is close to the plane (within threshold in meters).
         """
         A, B, C, D = plane
-        dist = distance_from_plane(finger_point, A, B, C, D)
+        dist = self.distance_from_plane(finger_point, A, B, C, D)
         return dist < threshold, dist
 
     def image_callback(self, rgb_msg, depth_msg):
@@ -209,7 +209,7 @@ class PointerTipDepthPlanePublisher(Node):
 
                         cv2.putText(rgb_image, 'TOUCH', (0, 0), font, 2, (0, 255, 0), 4)
 
-                        point = (int(index_tip_x - x1), int(index_tip_y - y1))
+                        point = (int(index_tip_x - self.x1), int(index_tip_y - self.y1))
                         scaled_x, scaled_y = self.map_point_to_screen_resolution(point, self.surface_width, self.surface_height, self.screen_width, self.screen_height)
 
                         self.touch_id = self.generate_touch_id()
