@@ -16,14 +16,13 @@ class ArucoDisplayNode(Node):
         self.declare_parameter('height', 1080)
         self.declare_parameter('marker_size', 400)
         self.declare_parameter('dictionary_id', cv2.aruco.DICT_4X4_50)
-        self.declare_parameter('output_yaml', 'calibration.yaml')
 
         # Get parameter values
         self.width = self.get_parameter('width').value
         self.height = self.get_parameter('height').value
         self.marker_size = self.get_parameter('marker_size').value
         self.dictionary_id = self.get_parameter('dictionary_id').value
-        self.output_yaml = self.get_parameter('output_yaml').value
+
 
 
         self.aruco_dict = cv2.aruco.getPredefinedDictionary(self.dictionary_id)
@@ -51,8 +50,9 @@ class ArucoDisplayNode(Node):
         marker_positions = [
             (0, 0),
             (self.width - self.marker_size, 0),
+            (self.width - self.marker_size, self.height - self.marker_size),
             (0, self.height - self.marker_size),
-            (self.width - self.marker_size, self.height - self.marker_size)
+            
         ]
 
         for i, (x, y) in enumerate(marker_positions):

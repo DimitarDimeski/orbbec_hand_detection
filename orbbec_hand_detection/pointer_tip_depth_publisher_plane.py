@@ -80,6 +80,28 @@ class PointerTipDepthPlanePublisher(Node):
         self.y3 = calib_data['screen']['y3']
         self.x4 = calib_data['screen']['x4']
         self.y4 = calib_data['screen']['y4']
+        
+        # Get your 4 screen corner points from calib_data
+	pts = np.array([
+	    [calib_data['screen']['x1'], calib_data['screen']['y1']],
+	    [calib_data['screen']['x2'], calib_data['screen']['y2']],
+	    [calib_data['screen']['x3'], calib_data['screen']['y3']],
+	    [calib_data['screen']['x4'], calib_data['screen']['y4']]
+	], dtype=np.int32)
+	
+	# Define destination points in normalized image frame
+	pts_dst = np.array([
+	    [0, 0],   # top-left
+	    [1, 0],   # top-right
+	    [1, 1],   # bottom-left
+	    [0, 1]    # bottom-right
+	], dtype=np.float32)
+	
+	# Compute homography
+	self.transform_image_to_screen, _ = cv2.findHomography(pts, pts_dst)
+	
+	# Reshape to match contour format (n,1,2)
+	self.contour = pts.reshape((-1, 1, 2))
 
         # Parameters for the detection surface in the image
         self.surface_width = self.x2 - self.x1
@@ -131,11 +153,12 @@ class PointerTipDepthPlanePublisher(Node):
     def generate_touch_id(self) -> str:
         return f"{self.touch_id_counter}"
 
-    def map_point_to_screen_resolution(self, point, bbox_width, bbox_height, target_width=1920, target_height=1080):
-        x, y = point
-        scale_x = target_width / bbox_width
-        scale_y = target_height / bbox_height
-        return int(x * scale_x), int(y * scale_y)
+    def map_point_to_screen_resolution(self, point, target_width=1920, target_height=1080):
+    	"""
+    	Scale point to match screen resolution
+    	"""
+    	x, y = point
+        return int(x * target_width), int(y * target_height)
 
     def depth_to_point(self, u, v, depth, fx, fy, cx, cy):
         """
@@ -180,7 +203,14 @@ class PointerTipDepthPlanePublisher(Node):
         results = self.hands.process(rgb_image_for_mediapipe)
 
         plane = (self.A, self.B, self.C, self.D)
-
+	
+	# Visualize borders of screen
+	# Red top edge
+        cv2.line(rgb_image, (self.x1, self.y1), (self.x2 , self.y2), (0, 0, 255), 3)
+        # Green other edges
+        cv2.line(rgb_image, (self.x2, self.y2), (self.x3 , self.y3), (0, 255, 0), 3)
+        cv2.line(rgb_image, (self.x3, self.y3), (self.x4 , self.y4), (0, 255, 0), 3)
+        cv2.line(rgb_image, (self.x4, self.y4), (self.x1 , self.y1), (0, 255, 0), 3)
 
         cv2.rectangle(rgb_image, (self.x1, self.y1), (self.x4, self.y4), (0, 255, 0), 2)
 
@@ -194,11 +224,15 @@ class PointerTipDepthPlanePublisher(Node):
                 index_tip_y = int(hand_landmarks.landmark[mp.solutions.hands.HandLandmark.INDEX_FINGER_TIP].y * self.image_height)
 
                 depth = 0
-
-                if self.x1 <= index_tip_x <= self.x2 and self.y1 <= index_tip_y <= self.y4:
+		
+		# Check if point is inside the screen area
+		point_inside_screen = cv2.pointPolygonTest(self.countour, (index_tip_x, index_tip_y), measureDist=False)
+		
+                if point_inside_screen >= 0:
                     finger_depth = depth_image[index_tip_y, index_tip_x]
 
                     mp.solutions.drawing_utils.draw_landmarks(rgb_image, hand_landmarks, mp.solutions.hands.HAND_CONNECTIONS)
+                    
                     finger_point = self.depth_to_point(index_tip_x, index_tip_y, finger_depth, fx, fy, cx, cy)
                     is_touch, distance = self.detect_touch(finger_point, plane, threshold=self.depth_threshold)
                     
@@ -208,17 +242,18 @@ class PointerTipDepthPlanePublisher(Node):
                     if is_touch :
 
                         cv2.putText(rgb_image, 'TOUCH', (0, 0), font, 2, (0, 255, 0), 4)
-
-                        point = (int(index_tip_x - self.x1), int(index_tip_y - self.y1))
-                        scaled_x, scaled_y = self.map_point_to_screen_resolution(point, self.surface_width, self.surface_height, self.screen_width, self.screen_height)
+                        
+                        point = np.array([[[index_tip_x, index_tip_y]]], dtype=np.float32)
+			screen_point_norm = cv2.perspectiveTransform(point, self.transform_image_to_screen)[0][0]                        
+                        screen_point_x, screen_point_y = self.map_point_to_screen_resolution(screen_point_norm, self.screen_width, self.screen_height)
 
                         self.touch_id = self.generate_touch_id()
                         self.touch_id_counter += 1
 
                         event_data = {
                             'touchId': self.touch_id,
-                            'x': scaled_x,
-                            'y': scaled_y,
+                            'x': screen_point_x,
+                            'y': screen_point_y,
                             'pressure': 0.8,
                             'target': 'smart_table_surface',
                             'userId': 'test_user',
@@ -242,7 +277,7 @@ class PointerTipDepthPlanePublisher(Node):
                             self.bus.nats_client.publish('interaction.touch.down', payload),
                             self.async_loop
                             )
-                            logger.info(f"👇 TouchDown: {self.touch_id} at ({scaled_x}, {scaled_y})")
+                            logger.info(f"👇 TouchDown: {self.touch_id} at ({screen_point_x}, {screen_point_y})")
                         
         msg = self.bridge.cv2_to_imgmsg(rgb_image, encoding='bgr8')
         self.publisher_.publish(msg)

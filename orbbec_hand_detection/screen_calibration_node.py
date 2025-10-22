@@ -6,6 +6,7 @@ import numpy as np
 import yaml
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image, CameraInfo
+from message_filters import Subscriber, ApproximateTimeSynchronizer
 
 class ScreenPlaneCalibrator(Node):
     def __init__(self):
@@ -15,23 +16,31 @@ class ScreenPlaneCalibrator(Node):
         # Parameters
         self.declare_parameter('rgb_topic', '/camera/color/image_raw')
         self.declare_parameter('depth_topic', '/camera/depth/image_raw')
+        self.declare_parameter('rgb_info_topic', '/camera/color/camera_info')
         self.declare_parameter('depth_info_topic', '/camera/depth/camera_info')
         self.declare_parameter('num_samples_avg', 10)
         self.declare_parameter('output_yaml', 'calibration.yaml')
 
         self.rgb_topic = self.get_parameter('rgb_topic').value
         self.depth_topic = self.get_parameter('depth_topic').value
+        self.rgb_info_topic = self.get_parameter('rgb_info_topic').value
         self.depth_info_topic = self.get_parameter('depth_info_topic').value
         self.output_yaml = self.get_parameter('output_yaml').value
         self.num_samples_avg = self.get_parameter('num_samples_avg').value
 
         # Subscriptions
-        self.rgb_sub = self.create_subscription(Image, self.rgb_topic, self.rgb_callback, 10)
-        self.depth_sub = self.create_subscription(Image, self.depth_topic, self.depth_callback, 10)
+        self.rgb_sub = Subscriber(self, Image, self.rgb_topic)
+        self.depth_sub = Subscriber(self, Image, self.depth_topic)
+        self.rgb_info_sub = self.create_subscription(CameraInfo, self.rgb_info_topic, self.rgb_info_callback, 10)
         self.depth_info_sub = self.create_subscription(CameraInfo, self.depth_info_topic, self.depth_info_callback, 10)
+        
+        # Approximate sync of rgb and depth topics
+        self.ts = ApproximateTimeSynchronizer([self.rgb_sub, self.depth_sub], queue_size=10, slop=0.1)
+        self.ts.registerCallback(self.image_callback)
 
+	self.rgb_intrinsics_received = False
         self.depth_intrinsics_received = False
-        self.depth_image = None
+        self.rgb_K = None
         self.depth_K = None
         self.num_samples = 0
         self.filtered_depth = []
@@ -46,6 +55,20 @@ class ScreenPlaneCalibrator(Node):
         self.latest_inverted = False
 
         self.get_logger().info('Screen Plane Calibrator Node Started.')
+        
+    def rgb_info_callback(self, msg: CameraInfo):
+        if not self.rgb_intrinsics_received:
+            K = msg.k
+            self.rgb_K = {
+                'fx': float(K[0]),
+                'fy': float(K[4]),
+                'cx': float(K[2]),
+                'cy': float(K[5])
+            }
+            self.rgb_intrinsics_received = True
+            self.get_logger().info(f"RGB intrinsics received: {self.rgb_K}")
+            self.destroy_subscription(self.rgb_info_sub)
+
 
     def depth_info_callback(self, msg: CameraInfo):
         if not self.depth_intrinsics_received:
@@ -60,18 +83,16 @@ class ScreenPlaneCalibrator(Node):
             self.get_logger().info(f"Depth intrinsics received: {self.depth_K}")
             self.destroy_subscription(self.depth_info_sub)
 
-    def depth_callback(self, msg: Image):
-        self.depth_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
-
-    def rgb_callback(self, msg: Image):
-        if self.depth_image is None or not self.depth_intrinsics_received:
+    def image_callback(self, rgb_msg: Image, depth_msg: Image):
+        if not self.rgb_intrinsics_received or not self.depth_intrinsics_received:
             return
 
-        rgb = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+        rgb_image = self.bridge.imgmsg_to_cv2(rgb_msg, desired_encoding='bgr8')
+        depth_image = self.bridge.imgmsg_to_cv2(depth_msg, desired_encoding='32FC1')
 
         # Only perform the code in this block once, after that skip to avoid unnecessary computation
         if self.num_samples == 0:
-            gray = cv2.cvtColor(rgb, cv2.COLOR_BGR2GRAY)
+            gray = cv2.cvtColor(rgb_image, cv2.COLOR_BGR2GRAY)
             
             # Invert the image if previous hasn't been inverted
             if not self.latest_inverted:
@@ -93,22 +114,18 @@ class ScreenPlaneCalibrator(Node):
             
             # Dictionary to hold marker corners
             marker_dict = {id_: c.reshape((4, 2)) for id_, c in zip(ids, self.corners)}
+            
+            # For each detected marker, extract the *outermost* corner
+            corner_dict = {id_ : c[id_] for id_, c in marker_dict.items()}
+            
+	    # Convert to consistent clockwise order (TL, TR, BR, BL)
+	    self.screen_corners = [
+	        list(map(int, corner_dict[0])),
+	        list(map(int, corner_dict[1])),
+	        list(map(int, corner_dict[2])),
+	        list(map(int, corner_dict[3]))
+	    ]
 
-            # Compute outermost edges of screen
-            all_points = np.concatenate(list(marker_dict.values()), axis=0)
-            x_min, y_min = np.min(all_points, axis=0)
-            x_max, y_max = np.max(all_points, axis=0)
-
-            # Define corners in consistent order (TL, TR, BL, BR)
-            x1, y1 = int(x_min), int(y_min)     # Top-left
-            x2, y2 = int(x_max), int(y_min)     # Top-right
-            x3, y3 = int(x_min), int(y_max)     # Bottom-left
-            x4, y4 = int(x_max), int(y_max)     # Bottom-right
-
-            self.screen_corners = [[x1, y1],
-                              [x2, y2],
-                              [x3, y3],
-                              [x4, y4]]
 
         # If number of needed samples is reached average the depth at the three points and write to file
         if self.num_samples == self.num_samples_avg:
@@ -120,7 +137,7 @@ class ScreenPlaneCalibrator(Node):
             A, B, C, D = self.define_plane_from_points(self.filtered_depth[0], self.filtered_depth[1], self.filtered_depth[2])
 
             # Save to YAML
-            self.save_to_yaml(A, B, C, D, rgb.shape, self.depth_image.shape, self.depth_K, self.screen_corners)
+            self.save_to_yaml(A, B, C, D, rgb_image.shape, depth_image.shape, self.depth_K, self.screen_corners)
             self.get_logger().info(f"Calibration parameters saved to {self.output_yaml}")
 
             # Stop after calibration
@@ -135,7 +152,7 @@ class ScreenPlaneCalibrator(Node):
             c = corner[0]
             cx = int(np.mean(c[:, 0]))
             cy = int(np.mean(c[:, 1]))
-            z = float(self.depth_image[cy, cx]) / 1000.0  # assuming mm to meters
+            z = float(depth_image[cy, cx]) / 1000.0  # assuming mm to meters
             if z <= 0:
                 self.get_logger().warn(f"Invalid depth for marker {i}.")
                 return
