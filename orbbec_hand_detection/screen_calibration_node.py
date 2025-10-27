@@ -135,7 +135,7 @@ class ScreenPlaneCalibrator(Node):
             c = corner[0]
             cx = int(np.mean(c[:, 0]))
             cy = int(np.mean(c[:, 1]))
-            z = float(self.depth_image[cy, cx]) / 1000.0  # assuming mm to meters
+            z = float(self.depth_image[cy, cx])
             if z <= 0:
                 self.get_logger().warn(f"Invalid depth for marker {i}.")
                 return

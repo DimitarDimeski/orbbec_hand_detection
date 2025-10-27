@@ -40,7 +40,7 @@ class PointerTipDepthPublisher(Node):
 
         # Declare ROS parameters
         self.declare_parameter('calib_yaml_path', '')
-        self.declare_parameter('nats_url', 'nats://localhost:4222')
+        self.declare_parameter('nats_url', 'nats://localhost:4223')
         self.declare_parameter('screen_width', 1920)
         self.declare_parameter('screen_height', 1080)
         self.declare_parameter('depth_threshold', 0.01) # meters
@@ -114,7 +114,7 @@ class PointerTipDepthPublisher(Node):
     async def connect_to_bus(self):
         try:
             logger.info("Connecting to bus... ")
-            self.bus = CierraEventBus()
+            self.bus = CierraEventBus(self.nats_url)
             await self.bus.connect()
             logger.info("Successfully connected to NATS server.")
         except Exception as e:

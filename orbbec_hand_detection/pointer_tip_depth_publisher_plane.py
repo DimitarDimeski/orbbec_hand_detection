@@ -41,7 +41,7 @@ class PointerTipDepthPlanePublisher(Node):
 
         # Declare ROS parameters
         self.declare_parameter('calib_yaml_path', '')
-        self.declare_parameter('nats_url', 'nats://localhost:4222')
+        self.declare_parameter('nats_url', 'nats://localhost:4223')
         self.declare_parameter('screen_width', 1920)
         self.declare_parameter('screen_height', 1080)
         self.declare_parameter('depth_threshold', 0.01) # meters
@@ -122,7 +122,7 @@ class PointerTipDepthPlanePublisher(Node):
     async def connect_to_bus(self):
         try:
             logger.info("Connecting to bus... ")
-            self.bus = CierraEventBus()
+            self.bus = CierraEventBus(self.nats_url)
             await self.bus.connect()
             logger.info("Successfully connected to NATS server.")
         except Exception as e:
@@ -202,7 +202,7 @@ class PointerTipDepthPlanePublisher(Node):
                     finger_point = self.depth_to_point(index_tip_x, index_tip_y, finger_depth, fx, fy, cx, cy)
                     is_touch, distance = self.detect_touch(finger_point, plane, threshold=self.depth_threshold)
                     
-                    logger.info(f'Index finger tip coordinates: ({index_tip_x}, {index_tip_y}), Depth: {finger_depth:.3f} m')
+                    logger.info(f'Index finger tip coordinates: ({index_tip_x}, {index_tip_y}), Depth: {finger_depth:.3f} m, Distance: {distance}, Finger Point: {finger_point} Touch: {is_touch}')
                     cv2.putText(rgb_image, f'{finger_depth:.2f}mm, Screen Distance: {distance}', (index_tip_x, index_tip_y), font, font_scale, (0, 255, 0), thickness)
 
                     if is_touch :
