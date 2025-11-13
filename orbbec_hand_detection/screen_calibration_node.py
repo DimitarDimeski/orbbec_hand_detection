@@ -20,6 +20,7 @@ class ScreenPlaneCalibrator(Node):
         self.declare_parameter('depth_info_topic', '/camera/depth/camera_info')
         self.declare_parameter('num_samples_avg', 10)
         self.declare_parameter('output_yaml', 'calibration.yaml')
+        self.declare_parameter('rotate_image', False)
 
         self.rgb_topic = self.get_parameter('rgb_topic').value
         self.depth_topic = self.get_parameter('depth_topic').value
@@ -27,6 +28,7 @@ class ScreenPlaneCalibrator(Node):
         self.depth_info_topic = self.get_parameter('depth_info_topic').value
         self.output_yaml = self.get_parameter('output_yaml').value
         self.num_samples_avg = self.get_parameter('num_samples_avg').value
+        self.rotate_image = self.get_parameter('rotate_image').value
 
         # Subscriptions
         self.rgb_sub = Subscriber(self, Image, self.rgb_topic)
@@ -89,6 +91,11 @@ class ScreenPlaneCalibrator(Node):
 
         rgb_image = self.bridge.imgmsg_to_cv2(rgb_msg, desired_encoding='bgr8')
         depth_image = self.bridge.imgmsg_to_cv2(depth_msg, desired_encoding='32FC1')
+        
+        # Rotate image if not inline
+        if self.rotate_image:
+            rgb_image = cv2.rotate(rgb_image, cv2.ROTATE_180)
+            depth_image = cv2.rotate(depth_image, cv2.ROTATE_180)
 
         # Only perform the code in this block once, after that skip to avoid unnecessary computation
         if self.num_samples == 0:
@@ -152,7 +159,7 @@ class ScreenPlaneCalibrator(Node):
             c = corner[0]
             cx = int(np.mean(c[:, 0]))
             cy = int(np.mean(c[:, 1]))
-            z = float(depth_image[cy, cx]) / 1000.0  # assuming mm to meters
+            z = float(depth_image[cy, cx]) # assuming mm to meters
             if z <= 0:
                 self.get_logger().warn(f"Invalid depth for marker {i}.")
                 return
