@@ -53,8 +53,8 @@ class PointerTipDepthPlanePublisher(Node):
         self.declare_parameter('bottom_offset', 0)
         self.declare_parameter('left_offset', 0)
         self.declare_parameter('right_offset', 0)
-        self.declare_parameter('contrast', 0)
-        self.declare_parameter('brightness', 0)
+        self.declare_parameter('contrast', 1.5)
+        self.declare_parameter('brightness', 20)
         self.declare_parameter('rotate_image', False)
         self.declare_parameter('use_depth', False)
         self.declare_parameter('use_grayscale', False)
@@ -110,26 +110,26 @@ class PointerTipDepthPlanePublisher(Node):
         self.y4 = calib_data['screen']['y4']
         
         # Get your 4 screen corner points from calib_data
-	pts = np.array([
-	    [calib_data['screen']['x1'], calib_data['screen']['y1']],
-	    [calib_data['screen']['x2'], calib_data['screen']['y2']],
-	    [calib_data['screen']['x3'], calib_data['screen']['y3']],
-	    [calib_data['screen']['x4'], calib_data['screen']['y4']]
-	], dtype=np.int32)
+        pts = np.array([
+        [calib_data['screen']['x1'], calib_data['screen']['y1']],
+        [calib_data['screen']['x2'], calib_data['screen']['y2']],
+        [calib_data['screen']['x3'], calib_data['screen']['y3']],
+        [calib_data['screen']['x4'], calib_data['screen']['y4']]
+        ], dtype=np.int32)
+        
+        # Define destination points in normalized image frame
+        pts_dst = np.array([
+   	    [0, 0],   # top-left
+        [1, 0],   # top-right
+        [1, 1],   # bottom-left
+        [0, 1]    # bottom-right
+        ], dtype=np.float32)
 	
-	# Define destination points in normalized image frame
-	pts_dst = np.array([
-	    [0, 0],   # top-left
-	    [1, 0],   # top-right
-	    [1, 1],   # bottom-left
-	    [0, 1]    # bottom-right
-	], dtype=np.float32)
+        # Compute homography
+        self.transform_image_to_screen, _ = cv2.findHomography(pts, pts_dst)
 	
-	# Compute homography
-	self.transform_image_to_screen, _ = cv2.findHomography(pts, pts_dst)
-	
-	# Reshape to match contour format (n,1,2)
-	self.contour = pts.reshape((-1, 1, 2))
+        # Reshape to match contour format (n,1,2)
+        self.contour = pts.reshape((-1, 1, 2))
 
         # Parameters for the detection surface in the image
         self.surface_width = self.x2 - self.x1
@@ -182,11 +182,11 @@ class PointerTipDepthPlanePublisher(Node):
         return f"{self.touch_id_counter}"
 
     def map_point_to_screen_resolution(self, point, target_width=1920, target_height=1080):
-    	"""
-    	Scale point to match screen resolution
-    	"""
-    	x, y = point
-        return int(x * target_width), int(y * target_height)
+      	"""
+        Scale point to match screen resolution
+      	"""
+      	x, y = point
+      	return int(x * target_width), int(y * target_height)
 
     def depth_to_point(self, u, v, depth, fx, fy, cx, cy):
         """
@@ -278,8 +278,8 @@ class PointerTipDepthPlanePublisher(Node):
 
                 depth = 0
 		
-		# Check if point is inside the screen area
-		point_inside_screen = cv2.pointPolygonTest(self.countour, (index_tip_x, index_tip_y), measureDist=False)
+		        # Check if point is inside the screen area
+                point_inside_screen = cv2.pointPolygonTest(self.countour, (index_tip_x, index_tip_y), measureDist=False)
 		
                 if point_inside_screen >= 0:
                 
@@ -301,9 +301,9 @@ class PointerTipDepthPlanePublisher(Node):
                         point = np.array([[[index_tip_x, index_tip_y]]], dtype=np.float32)
                         
                         
-			screen_point_norm = cv2.perspectiveTransform(point, self.transform_image_to_screen)[0][0]
+                        screen_point_norm = cv2.perspectiveTransform(point, self.transform_image_to_screen)[0][0]
 			
-			# Account for offset in screen cropping
+			            # Account for offset in screen cropping
                         screen_width_offsetted = self.screen_width - self.left_offset - self.right_offset
                         screen_height_offsetted = self.screen_height - self.top_offset - self.bottom_offset    
                                           

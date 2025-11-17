@@ -40,7 +40,7 @@ class ScreenPlaneCalibrator(Node):
         self.ts = ApproximateTimeSynchronizer([self.rgb_sub, self.depth_sub], queue_size=10, slop=0.1)
         self.ts.registerCallback(self.image_callback)
 
-	self.rgb_intrinsics_received = False
+        self.rgb_intrinsics_received = False
         self.depth_intrinsics_received = False
         self.rgb_K = None
         self.depth_K = None
@@ -125,13 +125,13 @@ class ScreenPlaneCalibrator(Node):
             # For each detected marker, extract the *outermost* corner
             corner_dict = {id_ : c[id_] for id_, c in marker_dict.items()}
             
-	    # Convert to consistent clockwise order (TL, TR, BR, BL)
-	    self.screen_corners = [
-	        list(map(int, corner_dict[0])),
-	        list(map(int, corner_dict[1])),
-	        list(map(int, corner_dict[2])),
-	        list(map(int, corner_dict[3]))
-	    ]
+            # Convert to consistent clockwise order (TL, TR, BR, BL)
+            self.screen_corners = [
+            list(map(int, corner_dict[0])),
+            list(map(int, corner_dict[1])),
+            list(map(int, corner_dict[2])),
+            list(map(int, corner_dict[3]))
+            ]
 
 
         # If number of needed samples is reached average the depth at the three points and write to file
@@ -217,4 +217,5 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
+
 
