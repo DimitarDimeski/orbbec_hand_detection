@@ -14,8 +14,12 @@ class ArucoDisplayNode(Node):
         # Parameters
         self.declare_parameter('width', 1920)
         self.declare_parameter('height', 1080)
-        self.declare_parameter('marker_size', 400)
+        self.declare_parameter('marker_size', 200)
         self.declare_parameter('dictionary_id', cv2.aruco.DICT_4X4_50)
+        self.declare_parameter('top_offset', 0)
+        self.declare_parameter('bottom_offset', 0)
+        self.declare_parameter('left_offset', 0)
+        self.declare_parameter('right_offset', 0)
         self.declare_parameter('output_yaml', 'calibration.yaml')
 
         # Get parameter values
@@ -23,6 +27,10 @@ class ArucoDisplayNode(Node):
         self.height = self.get_parameter('height').value
         self.marker_size = self.get_parameter('marker_size').value
         self.dictionary_id = self.get_parameter('dictionary_id').value
+        self.top_offset = self.get_parameter('top_offset').value
+        self.bottom_offset = self.get_parameter('bottom_offset').value
+        self.left_offset = self.get_parameter('left_offset').value
+        self.right_offset = self.get_parameter('right_offset').value
         self.output_yaml = self.get_parameter('output_yaml').value
 
 
@@ -49,10 +57,10 @@ class ArucoDisplayNode(Node):
         image = np.ones((self.height, self.width, 3), dtype=np.uint8) * 255
 
         marker_positions = [
-            (0, 0),
-            (self.width - self.marker_size, 0),
-            (0, self.height - self.marker_size),
-            (self.width - self.marker_size, self.height - self.marker_size)
+            (0 + self.left_offset, 0 + self.top_offset),
+            (self.width - self.marker_size - self.right_offset, 0 + self.top_offset),
+            (0 + self.left_offset, self.height - self.marker_size - self.bottom_offset),
+            (self.width - self.marker_size - self.right_offset, self.height - self.marker_size - self.bottom_offset)
         ]
 
         for i, (x, y) in enumerate(marker_positions):

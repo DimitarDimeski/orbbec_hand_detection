@@ -93,10 +93,10 @@ def generate_launch_description():
     # These nodes starts after calibration is done
     
     # Touch detection node
-    pointer_tip_depth_plane_node = Node(
+    pointer_tip_depth_plane_depth_image_node = Node(
         package=package_name,
-        executable='pointer_tip_depth_plane',
-        name='pointer_tip_depth_plane',
+        executable='pointer_tip_depth_plane_depth_image',
+        name='pointer_tip_depth_plane_depth_image',
         parameters=[
             {'calib_yaml_path': calibration_file},
             {'nats_url': EnvironmentVariable('NATS_URL', default_value='nats://localhost:4222')},
@@ -115,7 +115,6 @@ def generate_launch_description():
             {'brightness' : EnvironmentVariable('BRIGHTNESS', default_value='20')},
             {'adjust_contrast_brightness' : EnvironmentVariable('ADJUST_CONTRAST_BRIGHTNESS', default_value='False')},
             {'rotate_image': EnvironmentVariable('ROTATE_IMAGE', default_value='False')},
-            {'use_depth': EnvironmentVariable('USE_DEPTH', default_value='False')},
             {'use_grayscale': EnvironmentVariable('USE_GRAYSCALE', default_value='False')},
             {'static_image_mode': EnvironmentVariable('STATIC_IMAGE_MODE', default_value='False')},
             {'max_num_hands': EnvironmentVariable('MAX_NUM_HANDS', default_value='10')},
@@ -138,7 +137,7 @@ def generate_launch_description():
         event_handler=OnProcessExit(
             target_action=screen_calibration_node,
             on_exit=[
-                pointer_tip_depth_plane_node,
+                pointer_tip_depth_plane_depth_image_node,
             ],
         )
     )

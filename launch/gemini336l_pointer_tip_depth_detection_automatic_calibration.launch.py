@@ -34,7 +34,7 @@ def generate_launch_description():
             os.path.join(
                 get_package_share_directory('orbbec_camera'),
                 'launch',
-                'gemini2.launch.py'
+                'gemini_330_series.launch.py'
             )
         ),
         launch_arguments={

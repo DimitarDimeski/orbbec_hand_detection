@@ -17,13 +17,15 @@ class ScreenPlaneCalibrator(Node):
         self.declare_parameter('depth_topic', '/camera/depth/image_raw')
         self.declare_parameter('depth_info_topic', '/camera/depth/camera_info')
         self.declare_parameter('num_samples_avg', 10)
-        self.declare_parameter('output_yaml', 'calibration.yaml')
+        self.declare_parameter('output_yaml', 'calibration.yml')
+        self.declare_parameter('rotate_image', False)
 
         self.rgb_topic = self.get_parameter('rgb_topic').value
         self.depth_topic = self.get_parameter('depth_topic').value
         self.depth_info_topic = self.get_parameter('depth_info_topic').value
         self.output_yaml = self.get_parameter('output_yaml').value
         self.num_samples_avg = self.get_parameter('num_samples_avg').value
+        self.rotate_image = self.get_parameter('rotate_image').value
 
         # Subscriptions
         self.rgb_sub = self.create_subscription(Image, self.rgb_topic, self.rgb_callback, 10)
@@ -62,12 +64,21 @@ class ScreenPlaneCalibrator(Node):
 
     def depth_callback(self, msg: Image):
         self.depth_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
+        
+        # Rotate image if not inline
+        if self.rotate_image:
+            self.depth_image = cv2.rotate(self.depth_image, cv2.ROTATE_180)
+		
 
     def rgb_callback(self, msg: Image):
         if self.depth_image is None or not self.depth_intrinsics_received:
             return
 
         rgb = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+        
+        # Rotate image if not inline
+        if self.rotate_image:
+            rgb = cv2.rotate(rgb, cv2.ROTATE_180)
 
         # Only perform the code in this block once, after that skip to avoid unnecessary computation
         if self.num_samples == 0:

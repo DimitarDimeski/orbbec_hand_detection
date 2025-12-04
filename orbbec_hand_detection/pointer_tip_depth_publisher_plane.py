@@ -44,9 +44,23 @@ class PointerTipDepthPlanePublisher(Node):
         self.declare_parameter('nats_url', 'nats://localhost:4223')
         self.declare_parameter('screen_width', 1920)
         self.declare_parameter('screen_height', 1080)
-        self.declare_parameter('depth_threshold', 0.01) # meters
+        self.declare_parameter('depth_threshold', 0.01)
+        self.declare_parameter('depth_threshold_lower', 0.5)
+        self.declare_parameter('depth_threshold_upper', 0.5) 
         self.declare_parameter('min_detection_confidence', 0.5)
         self.declare_parameter('min_tracking_confidence', 0.5)
+        self.declare_parameter('top_offset', 0)
+        self.declare_parameter('bottom_offset', 0)
+        self.declare_parameter('left_offset', 0)
+        self.declare_parameter('right_offset', 0)
+        self.declare_parameter('contrast', 0)
+        self.declare_parameter('brightness', 0)
+        self.declare_parameter('rotate_image', False)
+        self.declare_parameter('use_depth', False)
+        self.declare_parameter('use_grayscale', False)
+        self.declare_parameter('adjust_contrast_brightness', False)
+        self.declare_parameter('static_image_mode', False)
+        self.declare_parameter('max_num_hands', 10)
 
         # Read parameter values
         calib_path = self.get_parameter('calib_yaml_path').get_parameter_value().string_value
@@ -54,8 +68,23 @@ class PointerTipDepthPlanePublisher(Node):
         self.screen_width = self.get_parameter('screen_width').value
         self.screen_height = self.get_parameter('screen_height').value
         self.depth_threshold = self.get_parameter('depth_threshold').value
+        self.depth_threshold_lower = self.get_parameter('depth_threshold_lower').value
+        self.depth_threshold_upper = self.get_parameter('depth_threshold_upper').value
         self.min_detection_conf = self.get_parameter('min_detection_confidence').get_parameter_value().double_value
         self.min_tracking_conf = self.get_parameter('min_tracking_confidence').get_parameter_value().double_value
+        self.top_offset = self.get_parameter('top_offset').value
+        self.bottom_offset = self.get_parameter('bottom_offset').value
+        self.left_offset = self.get_parameter('left_offset').value
+        self.right_offset = self.get_parameter('right_offset').value
+        self.contrast = self.get_parameter('contrast').value
+        self.brightness = self.get_parameter('brightness').value
+        self.rotate_image = self.get_parameter('rotate_image').value
+        self.use_depth = self.get_parameter('use_depth').value
+        self.use_grayscale = self.get_parameter('use_grayscale').value
+        self.adjust_contrast_brightness = self.get_parameter('adjust_contrast_brightness').value
+        self.static_image_mode = self.get_parameter('static_image_mode').value
+        self.max_num_hands = self.get_parameter('max_num_hands').value
+        
         
         if not calib_path or not os.path.exists(calib_path):
             raise FileNotFoundError(f"Calibration YAML not found or invalid path: {calib_path}")
@@ -106,6 +135,8 @@ class PointerTipDepthPlanePublisher(Node):
 
         # Mediapipe setup
         self.hands = mp.solutions.hands.Hands(
+            static_image_mode=self.static_image_mode,
+            max_num_hands=self.max_num_hands,
             min_detection_confidence=self.min_detection_conf,
             min_tracking_confidence=self.min_tracking_conf
         )
@@ -162,7 +193,13 @@ class PointerTipDepthPlanePublisher(Node):
         """
         A, B, C, D = plane
         dist = self.distance_from_plane(finger_point, A, B, C, D)
-        return dist < threshold, dist
+        
+        is_touch = False
+        
+        if dist > (threshold - self.depth_threshold_lower) and dist < (threshold + self.depth_threshold_upper):
+            is_touch = True 
+        
+        return is_touch, dist
 
     def image_callback(self, rgb_msg, depth_msg):
 
@@ -176,7 +213,26 @@ class PointerTipDepthPlanePublisher(Node):
         rgb_image = self.bridge.imgmsg_to_cv2(rgb_msg, desired_encoding='bgr8')
         depth_image = self.bridge.imgmsg_to_cv2(depth_msg, desired_encoding='32FC1')
         
+        # Rotate images 180 degress if not inline
+        if self.rotate_image:
+            rgb_image = cv2.rotate(rgb_image, cv2.ROTATE_180)
+            depth_image = cv2.rotate(depth_image, cv2.ROTATE_180)
+            
         rgb_image_for_mediapipe = cv2.cvtColor(rgb_image, cv2.COLOR_BGR2RGB)
+            
+        if self.use_depth:
+            depth_8u = cv2.normalize(depth_image, None, 0, 255, cv2.NORM_MINMAX)
+            depth_8u = np.uint8(depth_8u)
+        
+            rgb_image_for_mediapipe = cv2.cvtColor(depth_8u, cv2.COLOR_GRAY2RGB)
+            
+        if self.adjust_contrast_brightness:
+            rgb_image_for_mediapipe = cv2.convertScaleAbs(rgb_image_for_mediapipe, alpha=self.contrast, beta=self.brightness)
+        
+        if self.use_grayscale:
+            gray = cv2.cvtColor(rgb_image_for_mediapipe, cv2.COLOR_RGB2GRAY)
+            rgb_image_for_mediapipe = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
+            
         results = self.hands.process(rgb_image_for_mediapipe)
 
         plane = (self.A, self.B, self.C, self.D)
@@ -193,12 +249,17 @@ class PointerTipDepthPlanePublisher(Node):
                 index_tip_x = int(hand_landmarks.landmark[mp.solutions.hands.HandLandmark.INDEX_FINGER_TIP].x * self.image_width)
                 index_tip_y = int(hand_landmarks.landmark[mp.solutions.hands.HandLandmark.INDEX_FINGER_TIP].y * self.image_height)
 
+	        mp.solutions.drawing_utils.draw_landmarks(rgb_image, hand_landmarks, mp.solutions.hands.HAND_CONNECTIONS)
+		
                 depth = 0
 
                 if self.x1 <= index_tip_x <= self.x2 and self.y1 <= index_tip_y <= self.y4:
-                    finger_depth = depth_image[index_tip_y, index_tip_x]
-
-                    mp.solutions.drawing_utils.draw_landmarks(rgb_image, hand_landmarks, mp.solutions.hands.HAND_CONNECTIONS)
+                
+                    # Get a patch of depth values around finger tip in order to reduce noise 
+                    finger_patch = depth_image[index_tip_y-2:index_tip_y+3, index_tip_x-2:index_tip_x+3]
+                
+               	    finger_depth = np.median(finger_patch)
+                    
                     finger_point = self.depth_to_point(index_tip_x, index_tip_y, finger_depth, fx, fy, cx, cy)
                     is_touch, distance = self.detect_touch(finger_point, plane, threshold=self.depth_threshold)
                     
@@ -207,10 +268,18 @@ class PointerTipDepthPlanePublisher(Node):
 
                     if is_touch :
 
-                        cv2.putText(rgb_image, 'TOUCH', (0, 0), font, 2, (0, 255, 0), 4)
+                        cv2.putText(rgb_image, 'TOUCH', (0, 0), font, 4, (0, 255, 0), 4)
 
                         point = (int(index_tip_x - self.x1), int(index_tip_y - self.y1))
-                        scaled_x, scaled_y = self.map_point_to_screen_resolution(point, self.surface_width, self.surface_height, self.screen_width, self.screen_height)
+                        
+                        # Account for offset in screen cropping
+                        screen_width_offsetted = self.screen_width - self.left_offset - self.right_offset
+                        screen_height_offsetted = self.screen_height - self.top_offset - self.bottom_offset
+                        
+                        scaled_x, scaled_y = self.map_point_to_screen_resolution(point, self.surface_width, self.surface_height, screen_width_offsetted, screen_height_offsetted)
+                        
+                        scaled_x = scaled_x + self.left_offset
+                        scaled_y = scaled_y + self.top_offset
 
                         self.touch_id = self.generate_touch_id()
                         self.touch_id_counter += 1

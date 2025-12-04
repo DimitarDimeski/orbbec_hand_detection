@@ -98,7 +98,11 @@ class PointerTipDepthPublisher(Node):
         rgb_image = self.bridge.imgmsg_to_cv2(rgb_msg, desired_encoding='bgr8')
         depth_image = self.bridge.imgmsg_to_cv2(depth_msg, desired_encoding='32FC1')
         
-        rgb_image_for_mediapipe = cv2.cvtColor(depth_image, cv2.COLOR_GRAY2RGB)
+        # Normalize depth to 0–255 and convert to uint8
+        depth_8u = cv2.normalize(depth_image, None, 0, 255, cv2.NORM_MINMAX)
+        depth_8u = np.uint8(depth_8u)
+        
+        rgb_image_for_mediapipe = cv2.cvtColor(depth_8u, cv2.COLOR_GRAY2RGB)
         results = self.hands.process(rgb_image_for_mediapipe)
 
         image_height, image_width, _ = rgb_image.shape
