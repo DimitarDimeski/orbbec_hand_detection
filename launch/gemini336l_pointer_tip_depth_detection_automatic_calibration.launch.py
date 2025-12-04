@@ -43,6 +43,7 @@ def generate_launch_description():
             'color_fps': EnvironmentVariable('COLOR_FPS', default_value='10'),
             'depth_width': EnvironmentVariable('DEPTH_WIDTH', default_value='1280'),
             'depth_height': EnvironmentVariable('DEPTH_HEIGHT', default_value='800'),
+            'device_preset': EnvironmentVariable('DEVICE_PRESET', default_value='Default'),
             'depth_fps': EnvironmentVariable('DEPTH_FPS', default_value='10'),
             'depth_registration': 'True',
             'enable_decimation_filter': EnvironmentVariable('ENABLE_DECIMATION_FILTER', default_value='False'),
