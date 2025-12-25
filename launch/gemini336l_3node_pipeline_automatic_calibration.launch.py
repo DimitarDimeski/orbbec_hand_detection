@@ -34,7 +34,7 @@ def generate_launch_description():
             os.path.join(
                 get_package_share_directory('orbbec_camera'),
                 'launch',
-                'gemini2.launch.py'
+                'gemini_330_series.launch.py'
             )
         ),
         launch_arguments={
@@ -43,6 +43,7 @@ def generate_launch_description():
             'color_fps': EnvironmentVariable('COLOR_FPS', default_value='10'),
             'depth_width': EnvironmentVariable('DEPTH_WIDTH', default_value='1280'),
             'depth_height': EnvironmentVariable('DEPTH_HEIGHT', default_value='800'),
+            'device_preset': EnvironmentVariable('DEVICE_PRESET', default_value='Default'),
             'depth_fps': EnvironmentVariable('DEPTH_FPS', default_value='10'),
             'depth_registration': 'True',
             'enable_decimation_filter': EnvironmentVariable('ENABLE_DECIMATION_FILTER', default_value='False'),
@@ -90,34 +91,64 @@ def generate_launch_description():
         output='screen'
     )
 
-    # These nodes starts after calibration is done
+    # These nodes start after calibration is done
     
-    # Touch detection node
-    pointer_tip_depth_plane_depth_image_node = Node(
+    # Node 1: MediaPipe Detection Node
+    mediapipe_detection_node = Node(
         package=package_name,
-        executable='pointer_tip_depth_plane_depth_image',
-        name='pointer_tip_depth_plane_depth_image',
+        executable='mediapipe_detection_node',
+        name='mediapipe_detection_node',
         parameters=[
+            {'rgb_topic': EnvironmentVariable('RGB_TOPIC', default_value='/camera/color/image_raw')},
+            {'detection_topic': EnvironmentVariable('DETECTION_TOPIC', default_value='/hand_detections')},
+            {'min_detection_confidence': EnvironmentVariable('MIN_DET_CONF', default_value='0.5')},
+            {'min_tracking_confidence': EnvironmentVariable('MIN_TRACK_CONF', default_value='0.5')},
+            {'static_image_mode': EnvironmentVariable('STATIC_IMAGE_MODE', default_value='False')},
+            {'max_num_hands': EnvironmentVariable('MAX_NUM_HANDS', default_value='10')},
+            {'model_complexity': EnvironmentVariable('MODEL_COMPLEXITY', default_value='1')},
+            {'rotate_image': EnvironmentVariable('ROTATE_IMAGE', default_value='False')},
+            {'use_depth': EnvironmentVariable('USE_DEPTH', default_value='False')},
+            {'use_grayscale': EnvironmentVariable('USE_GRAYSCALE', default_value='False')},
+            {'adjust_contrast_brightness': EnvironmentVariable('ADJUST_CONTRAST_BRIGHTNESS', default_value='False')},
+            {'contrast': EnvironmentVariable('CONTRAST', default_value='1.5')},
+            {'brightness': EnvironmentVariable('BRIGHTNESS', default_value='20')},
+            {'debug': EnvironmentVariable('DEBUG', default_value='False')},
+        ],
+        output='screen'
+    )
+
+    # Node 2: Touch Detection Node
+    touch_detection_node = Node(
+        package=package_name,
+        executable='touch_detection_node',
+        name='touch_detection_node',
+        parameters=[
+            {'depth_topic': EnvironmentVariable('DEPTH_TOPIC', default_value='/camera/depth/image_raw')},
+            {'detection_topic': EnvironmentVariable('DETECTION_TOPIC', default_value='/hand_detections')},
+            {'touch_detections_topic': EnvironmentVariable('TOUCH_DETECTIONS_TOPIC', default_value='/touch_detections')},
             {'calib_yaml_path': calibration_file},
-            {'nats_url': EnvironmentVariable('NATS_URL', default_value='nats://localhost:4222')},
             {'screen_width': EnvironmentVariable('SCREEN_WIDTH', default_value='1920')},
             {'screen_height': EnvironmentVariable('SCREEN_HEIGHT', default_value='1080')},
             {'depth_threshold': EnvironmentVariable('DEPTH_THR', default_value='0.01')},
             {'depth_threshold_lower': EnvironmentVariable('DEPTH_THR_LOWER', default_value='0.5')},
             {'depth_threshold_upper': EnvironmentVariable('DEPTH_THR_UPPER', default_value='0.5')},
-            {'min_detection_confidence': EnvironmentVariable('MIN_DET_CONF', default_value='0.5')},
-            {'min_tracking_confidence': EnvironmentVariable('MIN_TRACK_CONF', default_value='0.5')},
-            {'top_offset' : EnvironmentVariable('TOP_OFFSET', default_value='0')},
-            {'bottom_offset' : EnvironmentVariable('BOTTOM_OFFSET', default_value='0')},
-            {'left_offset' : EnvironmentVariable('LEFT_OFFSET', default_value='0')},
-            {'right_offset' : EnvironmentVariable('RIGHT_OFFSET', default_value='0')},
-            {'contrast' : EnvironmentVariable('CONTRAST', default_value='1.5')},
-            {'brightness' : EnvironmentVariable('BRIGHTNESS', default_value='20')},
-            {'adjust_contrast_brightness' : EnvironmentVariable('ADJUST_CONTRAST_BRIGHTNESS', default_value='False')},
+            {'top_offset': EnvironmentVariable('TOP_OFFSET', default_value='0')},
+            {'bottom_offset': EnvironmentVariable('BOTTOM_OFFSET', default_value='0')},
+            {'left_offset': EnvironmentVariable('LEFT_OFFSET', default_value='0')},
+            {'right_offset': EnvironmentVariable('RIGHT_OFFSET', default_value='0')},
             {'rotate_image': EnvironmentVariable('ROTATE_IMAGE', default_value='False')},
-            {'use_grayscale': EnvironmentVariable('USE_GRAYSCALE', default_value='False')},
-            {'static_image_mode': EnvironmentVariable('STATIC_IMAGE_MODE', default_value='False')},
-            {'max_num_hands': EnvironmentVariable('MAX_NUM_HANDS', default_value='10')},
+        ],
+        output='screen'
+    )
+
+    # Node 3: Touch Event Publisher Node
+    touch_event_publisher_node = Node(
+        package=package_name,
+        executable='touch_event_publisher_node',
+        name='touch_event_publisher_node',
+        parameters=[
+            {'nats_url': EnvironmentVariable('NATS_URL', default_value='nats://localhost:4222')},
+            {'touch_detections_topic': EnvironmentVariable('TOUCH_DETECTIONS_TOPIC', default_value='/touch_detections')},
         ],
         output='screen'
     )
@@ -132,12 +163,14 @@ def generate_launch_description():
         )  
     
 
-    # Event handler: when calibration node exits start touch detection and visualization nodes
+    # Event handler: when calibration node exits start detection nodes
     stop_calibration_and_start_detection = RegisterEventHandler(
         event_handler=OnProcessExit(
             target_action=screen_calibration_node,
             on_exit=[
-                pointer_tip_depth_plane_depth_image_node,
+                mediapipe_detection_node,
+                touch_detection_node,
+                touch_event_publisher_node,
             ],
         )
     )
@@ -150,6 +183,4 @@ def generate_launch_description():
         stop_calibration_and_start_detection,
        
     ])
-
-
 

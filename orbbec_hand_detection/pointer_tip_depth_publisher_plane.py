@@ -127,7 +127,7 @@ class PointerTipDepthPlanePublisher(Node):
         self.depth_sub = Subscriber(self, Image, '/camera/depth/image_raw')
 
         # Approximate sync
-        self.ts = ApproximateTimeSynchronizer([self.rgb_sub, self.depth_sub], queue_size=10, slop=0.1)
+        self.ts = ApproximateTimeSynchronizer([self.rgb_sub, self.depth_sub], queue_size=10, slop=0.01)
         self.ts.registerCallback(self.image_callback)
 
         self.publisher_ = self.create_publisher(Image, '/image_landmarked', 10)
@@ -263,7 +263,7 @@ class PointerTipDepthPlanePublisher(Node):
                     finger_point = self.depth_to_point(index_tip_x, index_tip_y, finger_depth, fx, fy, cx, cy)
                     is_touch, distance = self.detect_touch(finger_point, plane, threshold=self.depth_threshold)
                     
-                    logger.info(f'Index finger tip coordinates: ({index_tip_x}, {index_tip_y}), Depth: {finger_depth:.3f} m, Distance: {distance}, Finger Point: {finger_point} Touch: {is_touch}')
+                    logger.debug(f'Index finger tip coordinates: ({index_tip_x}, {index_tip_y}), Depth: {finger_depth:.3f} m, Distance: {distance}, Finger Point: {finger_point} Touch: {is_touch}')
                     cv2.putText(rgb_image, f'{finger_depth:.2f}mm, Screen Distance: {distance}', (index_tip_x, index_tip_y), font, font_scale, (0, 255, 0), thickness)
 
                     if is_touch :

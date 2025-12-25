@@ -15,6 +15,8 @@ setup(
          # Include all launch files
         (os.path.join('share', package_name, 'launch'), glob('launch/*.py')),
         (os.path.join('share', package_name, 'rviz'), glob('rviz/*.rviz')),
+        # Include message files
+        (os.path.join('share', package_name, 'msg'), glob('msg/*.msg')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -32,6 +34,10 @@ setup(
             'pointer_tip_depth_depth_image = orbbec_hand_detection.pointer_tip_depth_publisher_depth_image:main',
             'aruco_display_node = orbbec_hand_detection.show_aruco_display_node:main',
             'screen_calibration_node = orbbec_hand_detection.screen_calibration_node:main',
+            # New 3-node pipeline
+            'mediapipe_detection_node = orbbec_hand_detection.mediapipe_detection_node:main',
+            'touch_detection_node = orbbec_hand_detection.touch_detection_node:main',
+            'touch_event_publisher_node = orbbec_hand_detection.touch_event_publisher_node:main',
         ],
     },
 )
