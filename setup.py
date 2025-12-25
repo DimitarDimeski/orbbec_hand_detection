@@ -17,8 +17,7 @@ setup(
         (os.path.join('share', package_name, 'rviz'), glob('rviz/*.rviz')),
 
     ],
-    install_requires=['setuptools',
-    'rosidl_default_runtime',],
+    install_requires=['setuptools'],
     zip_safe=True,
     maintainer='Dimitar Dimeski',
     maintainer_email='dimitar.dimeski23@gmail.com',
