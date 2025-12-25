@@ -15,7 +15,8 @@ setup(
         # Note: launch and rviz files are installed by CMakeLists.txt
         # to avoid duplicate installation conflicts
     ],
-    install_requires=['setuptools'],
+    install_requires=['setuptools',
+    'rosidl_default_runtime',],
     zip_safe=True,
     maintainer='Dimitar Dimeski',
     maintainer_email='dimitar.dimeski23@gmail.com',
