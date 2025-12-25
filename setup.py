@@ -12,8 +12,10 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        # Note: launch and rviz files are installed by CMakeLists.txt
-        # to avoid duplicate installation conflicts
+        # Include all launch files
+        (os.path.join('share', package_name, 'launch'), glob('launch/*.py')),
+        (os.path.join('share', package_name, 'rviz'), glob('rviz/*.rviz')),
+
     ],
     install_requires=['setuptools',
     'rosidl_default_runtime',],
