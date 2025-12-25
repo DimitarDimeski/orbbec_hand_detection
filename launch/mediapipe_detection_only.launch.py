@@ -31,7 +31,7 @@ def generate_launch_description():
             {'use_depth': EnvironmentVariable('USE_DEPTH', default_value='False')},
             {'use_grayscale': EnvironmentVariable('USE_GRAYSCALE', default_value='False')},
             {'adjust_contrast_brightness': EnvironmentVariable('ADJUST_CONTRAST_BRIGHTNESS', default_value='False')},
-            {'contrast': EnvironmentVariable('CONTRAST', default_value='1.5')},
+            {'contrast': EnvironmentVariable('CONTRAST', default_value='1')},
             {'brightness': EnvironmentVariable('BRIGHTNESS', default_value='20')},
             {'debug': EnvironmentVariable('DEBUG', default_value='False')},
         ],
