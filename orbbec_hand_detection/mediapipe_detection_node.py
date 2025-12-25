@@ -15,7 +15,7 @@ import numpy as np
 import mediapipe as mp
 import logging
 
-from orbbec_hand_detection.msg import HandDetection
+from orbbec_hand_detection_msgs.msg import HandDetection
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

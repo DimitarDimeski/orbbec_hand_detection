@@ -16,7 +16,7 @@ import time
 import logging
 from datetime import datetime
 
-from orbbec_hand_detection.msg import TouchDetection
+from orbbec_hand_detection_msgs.msg import TouchDetection
 
 from cierra_event_bus import (
     CierraEventBus, Priority

@@ -17,7 +17,7 @@ import os
 import logging
 from message_filters import Subscriber, ApproximateTimeSynchronizer
 
-from orbbec_hand_detection.msg import HandDetection, TouchDetection, TouchEvent
+from orbbec_hand_detection_msgs.msg import HandDetection, TouchDetection, TouchEvent
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
