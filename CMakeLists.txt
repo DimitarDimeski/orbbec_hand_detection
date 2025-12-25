@@ -3,7 +3,6 @@ project(orbbec_hand_detection)
 
 # Find dependencies
 find_package(ament_cmake REQUIRED)
-#find_package(ament_cmake_python REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(std_msgs REQUIRED)
 
@@ -17,8 +16,10 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 
 ament_export_dependencies(rosidl_default_runtime)
 
-# Install Python package (this includes the generated message modules)
-ament_python_install_package(${PROJECT_NAME})
+install(
+  DIRECTORY orbbec_hand_detection
+  DESTINATION lib/python3/site-packages
+)
 
 # Install launch files
 install(DIRECTORY launch
