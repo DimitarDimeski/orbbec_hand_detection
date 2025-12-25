@@ -50,7 +50,7 @@ class TouchDetectionNode(Node):
         self.depth_topic = self.get_parameter('depth_topic').value
         self.detection_topic = self.get_parameter('detection_topic').value
         self.touch_detections_topic = self.get_parameter('touch_detections_topic').value
-        calib_path = self.get_parameter('calib_yaml_path').get_parameter_value().string_value
+        calib_path = self.get_parameter('calib_yaml_path').value
         self.screen_width = self.get_parameter('screen_width').value
         self.screen_height = self.get_parameter('screen_height').value
         self.depth_threshold = self.get_parameter('depth_threshold').value

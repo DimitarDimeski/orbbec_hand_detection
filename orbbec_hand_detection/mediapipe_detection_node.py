@@ -47,8 +47,8 @@ class MediaPipeDetectionNode(Node):
         # Read parameter values
         self.rgb_topic = self.get_parameter('rgb_topic').value
         self.detection_topic = self.get_parameter('detection_topic').value
-        self.min_detection_conf = self.get_parameter('min_detection_confidence').get_parameter_value().double_value
-        self.min_tracking_conf = self.get_parameter('min_tracking_confidence').get_parameter_value().double_value
+        self.min_detection_conf = self.get_parameter('min_detection_confidence').value
+        self.min_tracking_conf = self.get_parameter('min_tracking_confidence').value
         self.static_image_mode = self.get_parameter('static_image_mode').value
         self.max_num_hands = self.get_parameter('max_num_hands').value
         self.rotate_image = self.get_parameter('rotate_image').value
